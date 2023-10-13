@@ -1,0 +1,130 @@
+---
+title: "Capstone Project"
+author: ""
+date: "2023-09-08"
+output: html_document
+---
+# Instructions 
+The goal of this project is just to display that you've gotten used to working with the data and that you are on track to create your prediction algorithm. Please submit a report on R Pubs (http://rpubs.com/) that explains your exploratory analysis and your goals for the eventual app and algorithm. This document should be concise and explain only the major features of the data you have identified and briefly summarize your plans for creating the prediction algorithm and Shiny app in a way that would be understandable to a non-data scientist manager. You should make use of tables and plots to illustrate important summaries of the data set. The motivation for this project is to: 1. Demonstrate that you've downloaded the data and have successfully loaded it in.2. Create a basic report of summary statistics about the data sets.3. Report any interesting findings that you amassed so far.4. Get feedback on your plans for creating a prediction algorithm and Shiny app. 
+
+
+```{r}
+library(tm)
+library(wordcloud)
+library(stringi)
+```
+
+## Download the Data Set
+```{r, eval=FALSE}
+destfile = "./Coursera-SwiftKey.zip"
+if(!file.exists(destfile)){
+        url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+        file<- basename(url)
+        download.file(url, file, method="curl")
+unzip("data.zip")
+}
+```
+
+The data set consists of data files in 4 different languages. In this project, I will use the English data, en_US.twitter.txt, en_US.blogs.txt and en_US.news.txt files to analyze and evaluate text files. First, I will obtain the basic information about the text files.  
+
+
+## Examine the Data set
+
+To examine the data set, I get the file size, total number of lines and words count for each file. 
+
+```{r}
+#Get the file size 
+news_size <- file.info("en_US.news.txt")$size / 1024 ^ 2
+blogs_size <- file.info("en_US.blogs.txt")$size / 1024 ^ 2
+twitter_size <- file.info("en_US.twitter.txt")$size / 1024 ^ 2
+
+#Get the number of lines in each file
+news <- file("en_US.news.txt", open="rb")
+news_Lines <-readLines(news)
+
+blogs <- file("en_US.blogs.txt", open= "rb")
+blogs_Lines <-readLines(blogs)
+
+twitter <- file("en_US.twitter.txt", open= "rb")
+twitter_Lines <-readLines(twitter)
+
+#Get the number of words in files
+news_words <- stri_count_words(news_Lines)
+blogs_words <- stri_count_words(blogs_Lines)
+twitter_words <- stri_count_words(twitter_Lines)
+
+data_summary <- data.frame(File = c( "News", "Blogs", "Twitter"),
+                           Size_MB = c(news_size, blogs_size, twitter_size),
+                           Number_of_lines = c(length(news_Lines), length(blogs_Lines), length(twitter_Lines)),
+                           Number_of_words =c(sum(news_words),sum(blogs_words), sum(twitter_words) ) )
+print(data_summary)
+```
+As shown in the table above, the 3 files are basically similar in size. The twitter file has the highest number of lines. The news data file has about half of the lines as twitter files.  The blogs file has the lowest number of lines, but highest number of words. 
+
+
+## Data Processing 
+Since the data files are large (200 MB) and about 2 million of lines, I will take a sample of data containing only 1% of each file. 
+```{r}
+set.seed(400)
+sample_data <- c(sample(news_Lines, length(news_Lines)*0.01),
+                 sample(blogs_Lines, length(blogs_Lines)*0.01),
+                 sample(twitter_Lines, length(twitter_Lines)*0.01))
+
+#Load the data as corpus
+sample_doc <- VCorpus(VectorSource(sample_data))
+```
+Data is transformed to corpus so that we can perform different kids of operations on the data set.
+
+##  Cleaning up the Data Set
+To clean the data set, I use tm_map () function. This function can be used to clean special characters, remove numbers,remove punctuation and common stopwords in English.
+
+```{r}
+toSpace <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+sample_doc <- tm_map(sample_doc, toSpace, "/")
+sample_doc <- tm_map(sample_doc, toSpace, "@")
+sample_doc <- tm_map(sample_doc, toSpace, "\\|")
+sample_doc <- tm_map(sample_doc, content_transformer(tolower))
+sample_doc <- tm_map(sample_doc, removeWords, stopwords("english"))
+sample_doc <- tm_map(sample_doc, removePunctuation)
+sample_doc <- tm_map(sample_doc, removeNumbers)
+sample_doc <- tm_map(sample_doc, stripWhitespace)
+
+```
+Since the data set is still containing some stopwords, I included  additional stopwords to obtain he unique frequent words in the data set. 
+```{r}
+custom_stopwords <- c("is", "a", "for", "in", "the", "will", "can", "just", "like", "said")
+sample_doc <- tm_map(sample_doc, removeWords, custom_stopwords)
+```
+
+## Create the Word Cloud
+
+```{r}
+ wordcloud(sample_doc, max.words=200, random.order=FALSE, rot.per=.15, colors=brewer.pal(8, "Dark2"), scale=c(3, .3))
+
+```
+
+The word cloud visualize the key words found in the data set. The words with high frequency is given in the larger scale. This also shows the additional words that occur less frequently and can be used for further analysis. 
+
+## Plotting the data with high frequencies 
+```{r}
+# Build a term-document matrix
+sample_dtm <- TermDocumentMatrix(sample_doc)
+sample_m <- as.matrix(sample_dtm)
+
+# Sort by decreasing value of frequency
+sample_sort <- sort(rowSums(sample_m), decreasing =TRUE)
+sample_df <- data.frame(word = names(sample_sort),freq=sample_sort)
+
+#Plotting the most frequent words using bar chart. 
+
+barplot(sample_df[1:20,]$freq, las =2, names.arg = sample_df[1:20,]$word, 
+        col="lightgreen", main = "Top 20 most frequent words", ylab="Word frequencies")
+
+```
+
+This is the graph for unigram, which shows the most common words that appears one time such as "one", "get", "time" and "new". 
+
+
+
+## Future steps 
+I have examined the data set and performed exploratory data analysis. Next step will be perform predictive analysis for the training test using machine learning. This will be useful to test the accuracy of my analysis. The shiny app can be created to obtain n-gram models of the data set. 
